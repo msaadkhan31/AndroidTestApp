@@ -3,10 +3,11 @@ jobs:
   build:
     working_directory: ~/code
     docker:
-      - image: circleci/android:api-26-alpha
+      - image: circleci/android:api-25-alpha
     environment:
-      GRADLE_OPTS: -Xmx4g -Xms4g
-      JAVA_OPTIONS: -Xmx4g -Xms4g
+      JVM_OPTS: -Xmx3200m
+      ADB_INSTALL_TIMEOUT: 10
+      TERM: dumb
     steps:
       - checkout
       - restore_cache:
@@ -16,24 +17,34 @@ jobs:
           command: chmod +x ./gradlew
       - run:
           name: Download Gradle Dependencies
-          command: ./gradlew androidDependencies
+          command: ./gradlew clean androidDependencies
       - save_cache:
           paths:
             - ~/.gradle
           key: jars-{{ checksum "build.gradle" }}-{{ checksum  "app/build.gradle" }}
       - run:
-          name: Setup emulator for Test
-          command: sdkmanager "system-images;android-23;google_apis;x86" && echo "no" | avdmanager create avd -n test -k "system-images;android-23;google_apis;x86"
+          name: Install Android dependencies
+          command: |
+            sdkmanager "platform-tools"
+            sdkmanager "platforms;android-15"
+            sdkmanager "platforms;android-21"
+            sdkmanager "platforms;android-22"
+            sdkmanager "platforms;android-25"
+            sdkmanager "build-tools;24.0.3"
+            sdkmanager "extras;android;m2repository"
+            sdkmanager "extras;google;m2repository"
+            sdkmanager "extras;google;google_play_services"
+            sdkmanager "system-images;android-21;default;armeabi-v7a"          
       - run:
-          name: Launch the emulator
-          command: export LD_LIBRARY_PATH=${ANDROID_HOME}/emulator/lib64:${ANDROID_HOME}/emulator/lib64/qt/lib && emulator64-arm -avd test -noaudio -no-boot-anim -no-window -accel auto -verbose
+          name: Setup emulator
+          command: echo "no" | avdmanager create avd -n test -k "system-images;android-21;default;armeabi-v7a"
+      - run:
+          name: Launch emulator
+          command: export LD_LIBRARY_PATH=${ANDROID_HOME}/emulator/lib64:${ANDROID_HOME}/emulator/lib64/qt/lib && emulator64-arm -avd test -noaudio -no-boot-anim -no-window -accel on
           background: true
       - run:
-          name: Wait emulator
-          command: |
-            circle-android wait-for-boot
-            sleep 30
-            adb shell input keyevent 82
+          name: Wait for emulator
+          command: circle-android wait-for-boot
       - run:
           name: Run Espresso Tests Cases
           command: ./gradlew connectedAndroidTest
